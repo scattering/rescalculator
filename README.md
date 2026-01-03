@@ -1,48 +1,54 @@
 # Resolution Calculator for Triple-Axis Spectrometers
 
-A Python library for computing resolution matrices and performing S(Q,w) convolutions for Triple-Axis Spectrometer (TAS) experiments. This package provides both NumPy (CPU) and PyTorch backends for flexible deployment.
+[![PyPI version](https://badge.fury.io/py/rescalculator.svg)](https://pypi.org/project/rescalculator/)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+A Python library for computing resolution matrices and performing S(Q,w) convolutions for Triple-Axis Spectrometer (TAS) experiments. Features **Numba JIT acceleration** for 26x speedup over pure NumPy.
 
 Based on ResLib by Andrei Zheludev.
 
 ## Features
 
 - **Cooper-Nathans resolution formalism** with optional Popovici method
-- **Dual backend support**: NumPy for CPU, PyTorch for GPU acceleration
-- **Automatic device detection**: CUDA, MPS (Apple Silicon), or CPU
+- **Numba JIT acceleration**: 26x faster than NumPy with parallel CPU execution
+- **Multiple backends**: Numba (fastest), NumPy (always available), PyTorch (for gradients)
+- **Automatic backend selection**: Uses fastest available backend
 - **S(Q,w) convolution**: Integrate scattering cross-sections with resolution function
-- **Batched operations**: Efficient computation for thousands of Q-points simultaneously
+- **Batched operations**: Efficient computation for 100,000+ Q-points
 
 ## Installation
 
-### Requirements
-
-- Python >= 3.9
-- NumPy
-- SciPy
-- PyTorch (optional, for GPU acceleration)
-- lattice-calculator
-
-### Install from PyPI
+### From PyPI (Recommended)
 
 ```bash
+# Fast version with Numba (recommended - 26x speedup)
+pip install rescalculator[fast]
+
+# Basic version (NumPy only)
 pip install rescalculator
+
+# With PyTorch GPU support
+pip install rescalculator[gpu]
+
+# Everything (Numba + PyTorch + pyspinw + matplotlib)
+pip install rescalculator[all]
 ```
 
-### Install from source
+### From Source
 
 ```bash
 git clone https://github.com/scattering/rescalculator.git
 cd rescalculator
-pip install -e .
+pip install -e .[fast]
 ```
 
-### Setting up a conda environment
+### Using Conda
 
 ```bash
-conda create -n resolution python=3.11 pytorch numpy scipy matplotlib -c pytorch
+conda create -n resolution python=3.11 numba numpy scipy matplotlib -c conda-forge
 conda activate resolution
-pip install lattice-calculator
-pip install -e .
+pip install rescalculator
 ```
 
 ## Quick Start
