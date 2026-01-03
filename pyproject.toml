@@ -1,0 +1,73 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rescalculator"
+version = "2.0.0"
+description = "Triple-Axis Spectrometer Resolution Calculator with PyTorch support"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "William Ratcliff", email = "william.ratcliff@nist.gov"}
+]
+maintainers = [
+    {name = "William Ratcliff", email = "william.ratcliff@nist.gov"}
+]
+keywords = [
+    "neutron scattering",
+    "triple-axis spectrometer",
+    "resolution",
+    "TAS",
+    "Cooper-Nathans",
+    "pyspinw"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Physics",
+]
+requires-python = ">=3.9"
+dependencies = [
+    "numpy>=1.20",
+    "scipy>=1.7",
+    "lattice-calculator",
+]
+
+[project.optional-dependencies]
+gpu = ["torch>=2.0"]
+all = ["torch>=2.0", "pyspinw", "matplotlib"]
+dev = ["pytest", "pytest-cov", "black", "isort", "mypy"]
+
+[project.urls]
+Homepage = "https://github.com/scattering/rescalculator"
+Repository = "https://github.com/scattering/rescalculator"
+Issues = "https://github.com/scattering/rescalculator/issues"
+
+[tool.setuptools]
+packages = ["rescalculator", "rescalculator.backends"]
+package-dir = {"rescalculator" = ".", "rescalculator.backends" = "backends"}
+
+[tool.setuptools.package-data]
+"*" = ["*.md"]
+
+[tool.black]
+line-length = 100
+target-version = ['py39', 'py310', 'py311', 'py312']
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
