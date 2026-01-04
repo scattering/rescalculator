@@ -31,12 +31,17 @@ __version__ = '2.0.0'
 
 from .backends import get_backend, current_backend
 from .rescalc_torch import TASResolution, ConvolutionCalculator
-from .rescalc_batched import BatchedTASResolution
 
 __all__ = [
     'TASResolution',
-    'BatchedTASResolution',
     'ConvolutionCalculator',
     'get_backend',
     'current_backend',
 ]
+
+# Optional PyTorch-specific classes (require torch)
+try:
+    from .rescalc_batched import BatchedTASResolution
+    __all__.append('BatchedTASResolution')
+except ImportError:
+    pass  # torch not installed
