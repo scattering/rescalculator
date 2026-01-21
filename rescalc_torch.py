@@ -276,12 +276,16 @@ class TASResolution:
             RM_[3, 2] = M[2, 3]
             RM_[2, 3] = M[3, 2]
 
-            # Calculate prefactor
+            # Calculate prefactor (guard against numerical singularities)
             Rm = ki_n**3 / np.tan(thetam_n)
             Ra = kf_n**3 / np.tan(thetaa_n)
 
+            det_F = np.linalg.det(F)
+            det_G = np.linalg.det(G + C.T @ F @ C)
+            det_F = det_F if det_F > 1e-18 else 1e-18
+            det_G = det_G if det_G > 1e-18 else 1e-18
             R0_ = Rm * Ra * (2*pi)**4 / (64 * pi**2 * np.sin(thetam_n) * np.sin(thetaa_n)) \
-                  * np.sqrt(np.linalg.det(F) / np.linalg.det(G + C.T @ F @ C))
+                  * np.sqrt(det_F / det_G)
 
             # Monitor correction
             if moncor == 1:
@@ -294,7 +298,9 @@ class TASResolution:
                 R0_ = R0_ * ki_n
 
             # Chesser-Axe normalization
-            R0_ = R0_ / (2*pi)**2 * np.sqrt(np.linalg.det(RM_))
+            det_RM = np.linalg.det(RM_)
+            det_RM = det_RM if det_RM > 1e-18 else 1e-18
+            R0_ = R0_ / (2*pi)**2 * np.sqrt(det_RM)
 
             # kf/ki factor
             R0_ = R0_ * kf_n / ki_n
@@ -305,10 +311,16 @@ class TASResolution:
                 etasv = sample.get('vmosaic', sample['mosaic']) * CONVERT1
                 R0_ = R0_ / np.sqrt((1 + (q_n * etas)**2 * RM_[3, 3]) *
                                    (1 + (q_n * etasv)**2 * RM_[1, 1]))
-                Minv = np.linalg.inv(RM_)
+                try:
+                    Minv = np.linalg.inv(RM_)
+                except np.linalg.LinAlgError:
+                    Minv = np.linalg.inv(RM_ + np.eye(4) * 1e-6)
                 Minv[1, 1] = Minv[1, 1] + q_n**2 * etas**2
                 Minv[3, 3] = Minv[3, 3] + q_n**2 * etasv**2
-                RM_ = np.linalg.inv(Minv)
+                try:
+                    RM_ = np.linalg.inv(Minv)
+                except np.linalg.LinAlgError:
+                    RM_ = np.linalg.inv(Minv + np.eye(4) * 1e-6)
 
             # Store results
             R0[ind] = R0_
