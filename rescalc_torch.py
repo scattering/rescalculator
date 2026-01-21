@@ -355,13 +355,15 @@ class TASResolution:
         z = self.lattice.z
 
         Q = modvec(H, K, L, 'latticestar', self.lattice)
+        Q_arr = B.to_array(Q)
+        Q_safe = np.where(~np.isfinite(Q_arr) | (Q_arr == 0), 1e-6, Q_arr)
         npts = self.lattice.npts
 
         # Unit vector along Q
         uq = B.zeros((3, npts))
-        uq[0, :] = B.to_array(H) / B.to_array(Q)
-        uq[1, :] = B.to_array(K) / B.to_array(Q)
-        uq[2, :] = B.to_array(L) / B.to_array(Q)
+        uq[0, :] = B.to_array(H) / Q_safe
+        uq[1, :] = B.to_array(K) / Q_safe
+        uq[2, :] = B.to_array(L) / Q_safe
 
         # Scalar products
         xq = scalar(x[0, :], x[1, :], x[2, :],
@@ -381,7 +383,7 @@ class TASResolution:
         tmat[1, 0, :] = -B.to_array(yq)
 
         # Get resolution matrices
-        R0, RM = self.ResMat_vectorized(Q, W, EXP)
+        R0, RM = self.ResMat_vectorized(Q_safe, W, EXP)
 
         # Transform to sample coordinates
         RMS = B.zeros((4, 4, npts))
