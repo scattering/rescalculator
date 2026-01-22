@@ -82,7 +82,7 @@ class NumpyBackend(BaseBackend):
         return np.arcsin(x)
 
     def arccos(self, x):
-        return np.arccos(np.clip(x, -1.0, 1.0))
+        return np.arccos(x)
 
     def arctan2(self, y, x):
         return np.arctan2(y, x)
