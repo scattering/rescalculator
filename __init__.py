@@ -29,8 +29,12 @@ Example usage:
 __author__ = 'William Ratcliff'
 __version__ = '2.0.0'
 
-from .backends import get_backend, current_backend
-from .rescalc_torch import TASResolution, ConvolutionCalculator
+try:
+    from .backends import get_backend, current_backend
+    from .rescalc_torch import TASResolution, ConvolutionCalculator
+except ImportError:  # pragma: no cover - supports direct source-tree pytest imports
+    from backends import get_backend, current_backend
+    from rescalc_torch import TASResolution, ConvolutionCalculator
 
 __all__ = [
     'TASResolution',
@@ -41,7 +45,10 @@ __all__ = [
 
 # Optional PyTorch-specific classes (require torch)
 try:
-    from .rescalc_batched import BatchedTASResolution
+    try:
+        from .rescalc_batched import BatchedTASResolution
+    except ImportError:
+        from rescalc_batched import BatchedTASResolution
     __all__.append('BatchedTASResolution')
 except ImportError:
     pass  # torch not installed

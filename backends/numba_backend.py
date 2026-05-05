@@ -7,6 +7,7 @@ This backend uses Numba JIT compilation with parallel execution to achieve
 
 import numpy as np
 from numba import njit, prange
+from .numpy_backend import NumpyBackend
 
 # Physical constants
 CONVERT1 = 0.4246609 * np.pi / 60 / 180  # arcmin to radians
@@ -203,7 +204,7 @@ def resmat_numba_core(Q, W, ki_all, kf_all, thetam_all, thetaa_all,
     return R0, RM
 
 
-class NumbaBackend:
+class NumbaBackend(NumpyBackend):
     """
     Numba-accelerated backend for resolution calculations.
 
@@ -214,6 +215,7 @@ class NumbaBackend:
     name = 'numba'
 
     def __init__(self):
+        super().__init__()
         self._compiled = False
 
     def _warmup(self):

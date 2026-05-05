@@ -79,6 +79,8 @@ class TASResolution:
             Resolution matrices, shape (4, 4, npts)
         """
         B = self.B
+        if hasattr(B, "compute_resolution"):
+            return B.compute_resolution(Q, W, EXP)
         npts = len(EXP)
 
         # Convert inputs to backend arrays
