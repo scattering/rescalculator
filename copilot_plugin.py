@@ -67,6 +67,25 @@ def get_tool_specs():
             permissions_required=[PermissionLevel.read_only],
             **common,
         ),
+        ToolSpec(
+            name="calculate_ub",
+            namespace="tas.ubmatrix",
+            description="Build an orientation-aware UB-like matrix and reciprocal-lattice summary using icp-lattice-calculator.",
+            input_schema={
+                "type": "object",
+                "required": ["lattice"],
+                "properties": {
+                    "lattice": {"type": "object"},
+                    "ub_id": {"type": "string"},
+                },
+            },
+            output_schema={"type": "object"},
+            side_effect_level=SideEffectLevel.none,
+            preconditions=["Lattice parameters and two orientation vectors are supplied."],
+            postconditions=["UBMatrix-compatible output and reciprocal-lattice summary are returned."],
+            permissions_required=[PermissionLevel.read_only],
+            **common,
+        ),
     ]
 
 
@@ -76,6 +95,7 @@ def run_tool(call):
     dispatch = {
         ("tas.resolution", "calculate_resolution"): _calculate_resolution,
         ("tas.device_angles", "calculate_angles"): _calculate_angles,
+        ("tas.ubmatrix", "calculate_ub"): _calculate_ub,
     }
     handler = dispatch.get((call.tool_namespace, call.tool_name))
     if handler is None:
@@ -173,6 +193,61 @@ def _calculate_angles(call, ToolResult, ToolResultStatus, ToolError, ProvenanceR
         ToolResultStatus.success,
         output={"device_angles": result.model_dump(mode="json"), "experiment": _json_ready_exp(exp)},
         provenance=[ProvenanceRecord(source_type="tool", source_id="icp-lattice-calculator", method="SpecGoTo")],
+    )
+
+
+def _calculate_ub(call, ToolResult, ToolResultStatus, ToolError, ProvenanceRecord):
+    from tas_copilot_contracts import UBMatrix, UnitValue
+
+    lattice = _build_lattice(call.arguments)
+    matrix = _ub_like_matrix(lattice)
+    lattice_args = _lattice_args(call.arguments)
+    reciprocal = {
+        "astar": float(np.asarray(lattice.astar).reshape(-1)[0]),
+        "bstar": float(np.asarray(lattice.bstar).reshape(-1)[0]),
+        "cstar": float(np.asarray(lattice.cstar).reshape(-1)[0]),
+        "alphastar": float(np.asarray(lattice.alphastar).reshape(-1)[0]),
+        "betastar": float(np.asarray(lattice.betastar).reshape(-1)[0]),
+        "gammastar": float(np.asarray(lattice.gammastar).reshape(-1)[0]),
+    }
+    result = UBMatrix(
+        ub_id=str(call.arguments.get("ub_id") or "ub-from-lattice-orientation"),
+        matrix=matrix.tolist(),
+        lattice_parameters={
+            "a": UnitValue(value=float(lattice_args["a"]), unit="angstrom"),
+            "b": UnitValue(value=float(lattice_args["b"]), unit="angstrom"),
+            "c": UnitValue(value=float(lattice_args["c"]), unit="angstrom"),
+            "alpha": UnitValue(value=float(lattice_args["alpha"]), unit="deg"),
+            "beta": UnitValue(value=float(lattice_args["beta"]), unit="deg"),
+            "gamma": UnitValue(value=float(lattice_args["gamma"]), unit="deg"),
+        },
+        provenance=[ProvenanceRecord(source_type="tool", source_id="icp-lattice-calculator", method="Lattice reciprocal basis/orientation")],
+    )
+    return _result(
+        call,
+        ToolResult,
+        ToolResultStatus.success,
+        output={
+            "ub_matrix": result.model_dump(mode="json"),
+            "reciprocal_lattice": reciprocal,
+            "orientation_basis": {
+                "x": np.asarray(lattice.x, dtype=float).reshape(3).tolist(),
+                "y": np.asarray(lattice.y, dtype=float).reshape(3).tolist(),
+                "z": np.asarray(lattice.z, dtype=float).reshape(3).tolist(),
+            },
+        },
+        provenance=[ProvenanceRecord(source_type="tool", source_id="icp-lattice-calculator", method="Lattice reciprocal basis/orientation")],
+    )
+
+
+def _ub_like_matrix(lattice) -> np.ndarray:
+    # Columns are the orthonormal scattering-frame basis vectors in reciprocal-lattice coordinates.
+    return np.column_stack(
+        [
+            np.asarray(lattice.x, dtype=float).reshape(3),
+            np.asarray(lattice.y, dtype=float).reshape(3),
+            np.asarray(lattice.z, dtype=float).reshape(3),
+        ]
     )
 
 

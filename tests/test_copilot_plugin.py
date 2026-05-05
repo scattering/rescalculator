@@ -42,6 +42,7 @@ def test_get_tool_specs_exposes_resolution_and_angle_tools():
 
     assert ("tas.resolution", "calculate_resolution") in tools
     assert ("tas.device_angles", "calculate_angles") in tools
+    assert ("tas.ubmatrix", "calculate_ub") in tools
 
 
 def test_auto_backend_prefers_numba_when_installed():
@@ -73,6 +74,16 @@ def test_calculate_angles_returns_motor_positions():
     angles = result.output["device_angles"]["angles"]
     assert [item["name"] for item in angles] == ["M1", "M2", "S1", "S2", "A1", "A2"]
     assert all(item["position"]["unit"] == "deg" for item in angles)
+
+
+def test_calculate_ub_returns_matrix_and_reciprocal_lattice():
+    result = run_tool(_call("tas.ubmatrix", "calculate_ub", _arguments()))
+
+    assert result.status == ToolResultStatus.success
+    assert result.output["ub_matrix"]["ub_id"] == "ub-from-lattice-orientation"
+    assert len(result.output["ub_matrix"]["matrix"]) == 3
+    assert result.output["reciprocal_lattice"]["astar"] > 0
+    assert result.output["orientation_basis"]["x"][0] > 0
 
 
 def test_unknown_backend_reports_unavailable_or_error():
