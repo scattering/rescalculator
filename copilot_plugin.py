@@ -86,6 +86,45 @@ def get_tool_specs():
             permissions_required=[PermissionLevel.read_only],
             **common,
         ),
+        ToolSpec(
+            name="calculate_reciprocal_angle",
+            namespace="tas.ubmatrix",
+            description="Angle between two reciprocal-space (HKL) vectors from the icp-lattice-calculator metric; not constrained to a scattering plane.",
+            input_schema={
+                "type": "object",
+                "required": ["lattice", "v1", "v2"],
+                "properties": {
+                    "lattice": {"type": "object"},
+                    "v1": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3},
+                    "v2": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3},
+                },
+            },
+            output_schema={"type": "object"},
+            side_effect_level=SideEffectLevel.none,
+            preconditions=["Lattice parameters and two HKL vectors are supplied."],
+            postconditions=["No files or instrument state are modified."],
+            permissions_required=[PermissionLevel.read_only],
+            **common,
+        ),
+        ToolSpec(
+            name="calculate_inplane_orthogonal",
+            namespace="tas.ubmatrix",
+            description="In-plane perpendicular HKL direction for a vector in the (orient1, orient2) scattering plane, under the reciprocal-lattice metric (icp-lattice-calculator StandardSystem).",
+            input_schema={
+                "type": "object",
+                "required": ["lattice", "v"],
+                "properties": {
+                    "lattice": {"type": "object"},
+                    "v": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3},
+                },
+            },
+            output_schema={"type": "object"},
+            side_effect_level=SideEffectLevel.none,
+            preconditions=["Lattice parameters with orient1/orient2 plane vectors and one in-plane HKL vector are supplied."],
+            postconditions=["No files or instrument state are modified."],
+            permissions_required=[PermissionLevel.read_only],
+            **common,
+        ),
     ]
 
 
@@ -96,6 +135,8 @@ def run_tool(call):
         ("tas.resolution", "calculate_resolution"): _calculate_resolution,
         ("tas.device_angles", "calculate_angles"): _calculate_angles,
         ("tas.ubmatrix", "calculate_ub"): _calculate_ub,
+        ("tas.ubmatrix", "calculate_reciprocal_angle"): _calculate_reciprocal_angle,
+        ("tas.ubmatrix", "calculate_inplane_orthogonal"): _calculate_inplane_orthogonal,
     }
     handler = dispatch.get((call.tool_namespace, call.tool_name))
     if handler is None:
@@ -238,6 +279,109 @@ def _calculate_ub(call, ToolResult, ToolResultStatus, ToolError, ProvenanceRecor
         },
         provenance=[ProvenanceRecord(source_type="tool", source_id="icp-lattice-calculator", method="Lattice reciprocal basis/orientation")],
     )
+
+
+def _calculate_reciprocal_angle(call, ToolResult, ToolResultStatus, ToolError, ProvenanceRecord):
+    from lattice_calculator import angle, modvec
+
+    arguments = call.arguments
+    v1 = [float(value) for value in arguments["v1"]]
+    v2 = [float(value) for value in arguments["v2"]]
+    lattice = _build_lattice(arguments)
+    lattice.star()
+    angle_rad = _scalarize(angle(v1[0], v1[1], v1[2], v2[0], v2[1], v2[2], "latticestar", lattice))
+    q1 = _scalarize(modvec(v1[0], v1[1], v1[2], "latticestar", lattice))
+    q2 = _scalarize(modvec(v2[0], v2[1], v2[2], "latticestar", lattice))
+    output = {
+        "v1": v1,
+        "v2": v2,
+        "angle_deg": float(np.degrees(angle_rad)),
+        "v1_modulus_inv_angstrom": q1,
+        "v2_modulus_inv_angstrom": q2,
+        "v1_d_spacing_angstrom": (2.0 * np.pi / q1) if q1 > 0 else None,
+        "v2_d_spacing_angstrom": (2.0 * np.pi / q2) if q2 > 0 else None,
+        "convention": "Reciprocal-lattice metric (latticestar) from icp-lattice-calculator; vectors are general HKL and need not lie in any scattering plane.",
+    }
+    return _result(
+        call,
+        ToolResult,
+        ToolResultStatus.success,
+        output=output,
+        provenance=[ProvenanceRecord(source_type="tool", source_id="icp-lattice-calculator", method="lattice_calculator.angle latticestar metric")],
+    )
+
+
+def _calculate_inplane_orthogonal(call, ToolResult, ToolResultStatus, ToolError, ProvenanceRecord):
+    from lattice_calculator import S2R, StandardSystem, angle, modvec, scalar
+
+    arguments = call.arguments
+    v = [float(value) for value in arguments["v"]]
+    lattice = _build_lattice(arguments)
+    lattice.star()
+    lattice_args = _lattice_args(arguments)
+    orient1 = np.asarray(lattice_args["orient1"], dtype=float).reshape(1, 3)
+    orient2 = np.asarray(lattice_args["orient2"], dtype=float).reshape(1, 3)
+    x_v, y_v, z_v = StandardSystem(orient1, orient2, lattice)
+    qx = _scalarize(scalar(v[0], v[1], v[2], x_v[0, :], x_v[1, :], x_v[2, :], "latticestar", lattice))
+    qy = _scalarize(scalar(v[0], v[1], v[2], y_v[0, :], y_v[1, :], y_v[2, :], "latticestar", lattice))
+    qz = _scalarize(scalar(v[0], v[1], v[2], z_v[0, :], z_v[1, :], z_v[2, :], "latticestar", lattice))
+    modulus = _scalarize(modvec(v[0], v[1], v[2], "latticestar", lattice))
+    if modulus <= 0:
+        return _result(call, ToolResult, ToolResultStatus.validation_failed, errors=[ToolError(code="zero_vector", message="v must be a nonzero HKL vector.")])
+    out_of_plane_deg = float(np.degrees(np.arcsin(min(1.0, abs(qz) / modulus))))
+    # Rotate the in-plane component by +90 degrees in the orthonormal plane
+    # basis, then convert back to HKL through S2R. This is the metric-correct
+    # in-plane perpendicular; for hexagonal cells it is NOT the naive (010).
+    h_arr, k_arr, l_arr, _ = S2R(np.array([-qy]), np.array([qx]), np.array([0.0]), x_v, y_v, z_v)
+    orthogonal = [_scalarize(h_arr), _scalarize(k_arr), _scalarize(l_arr)]
+    rationalized = _rationalize_hkl(orthogonal)
+    verification_deg = float(
+        np.degrees(_scalarize(angle(v[0], v[1], v[2], orthogonal[0], orthogonal[1], orthogonal[2], "latticestar", lattice)))
+    )
+    warnings = []
+    if out_of_plane_deg > 0.01:
+        warnings.append(
+            f"Input vector is {out_of_plane_deg:.3f} deg out of the (orient1, orient2) plane; the orthogonal direction was computed from its in-plane projection."
+        )
+    output = {
+        "v": v,
+        "orient1": orient1.reshape(3).tolist(),
+        "orient2": orient2.reshape(3).tolist(),
+        "v_out_of_plane_deg": out_of_plane_deg,
+        "orthogonal_hkl": orthogonal,
+        "orthogonal_hkl_rational": rationalized,
+        "orthogonality_check_deg": verification_deg,
+        "v_modulus_inv_angstrom": modulus,
+        "orthogonal_modulus_inv_angstrom": _scalarize(modvec(orthogonal[0], orthogonal[1], orthogonal[2], "latticestar", lattice)),
+        "convention": "Orthogonal within the scattering plane under the reciprocal-lattice metric (icp-lattice-calculator StandardSystem); Euclidean HKL intuition fails for non-orthogonal cells.",
+        "warnings": warnings,
+    }
+    return _result(
+        call,
+        ToolResult,
+        ToolResultStatus.success,
+        output=output,
+        provenance=[ProvenanceRecord(source_type="tool", source_id="icp-lattice-calculator", method="StandardSystem in-plane 90-degree rotation")],
+    )
+
+
+def _scalarize(value: Any) -> float:
+    return float(np.asarray(value).reshape(-1)[0])
+
+
+def _rationalize_hkl(hkl: list[float], *, max_multiplier: int = 24, tolerance: float = 5.0e-4) -> list[int] | None:
+    """Smallest integer-HKL direction parallel to the input, if one exists."""
+    largest = max(abs(value) for value in hkl)
+    if largest <= 0:
+        return None
+    normalized = [value / largest for value in hkl]
+    for multiplier in range(1, max_multiplier + 1):
+        scaled = [value * multiplier for value in normalized]
+        rounded = [round(value) for value in scaled]
+        if all(abs(s - r) <= tolerance * multiplier for s, r in zip(scaled, rounded)) and any(rounded):
+            divisor = np.gcd.reduce([abs(value) for value in rounded if value]) or 1
+            return [int(value / divisor) for value in rounded]
+    return None
 
 
 def _ub_like_matrix(lattice) -> np.ndarray:
