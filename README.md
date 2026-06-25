@@ -17,6 +17,16 @@ Based on ResLib by Andrei Zheludev.
 - **S(Q,w) convolution**: Integrate scattering cross-sections with resolution function
 - **Batched operations**: Efficient computation for 100,000+ Q-points
 
+## Experimental QMC resolution integration
+
+`qmc_resolution.py` provides a small Sobol/QMC helper for numerical convolution
+with a Gaussian TAS resolution kernel. It exposes normalized and unnormalized
+Gaussian conventions explicitly so consumers can audit how the instrument `R0`
+prefactor is applied.
+
+See `docs/qmc_resolution_integration.md` for usage notes and current
+normalization caveats.
+
 ## Installation
 
 ### From PyPI (Recommended)
